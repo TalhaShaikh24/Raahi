@@ -498,7 +498,7 @@ fun BookingRequestScreen(
                     )
 
                     OfferChoiceTile(
-                        title = "Make a counter-offer",
+                        title = "Offer a different price",
                         subtitle = "Propose a per-seat fare. Driver can accept, decline, or counter.",
                         selected = useCounterOffer,
                         onClick = { useCounterOffer = true },

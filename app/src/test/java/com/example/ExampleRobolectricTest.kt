@@ -62,6 +62,43 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `offers and agreed deals appear inside the booking chat`() = runTest {
+        val before = MockCarPoolStore.conversationsFlow.value.first { it.bookingId == "B-1001" }.messages.size
+
+        val counter = MockCarPoolStore.submitCounterOffer("B-1001", OfferActor.PASSENGER, 850, "Final offer")
+        assertTrue(counter.isSuccess)
+        val newOfferId = counter.getOrThrow().offers.last().id
+
+        val afterOffer = MockCarPoolStore.conversationsFlow.value.first { it.bookingId == "B-1001" }
+        assertEquals(before + 1, afterOffer.messages.size)
+        val offerMsg = afterOffer.messages.last()
+        assertEquals(newOfferId, offerMsg.offerId)
+        assertTrue(offerMsg.isFromMe)
+
+        assertTrue(MockCarPoolStore.respondToPendingOffer("B-1001", OfferAction.ACCEPT).isSuccess)
+        val afterAccept = MockCarPoolStore.conversationsFlow.value.first { it.bookingId == "B-1001" }
+        assertTrue(afterAccept.messages.last().isSystem)
+        assertTrue(afterAccept.messages.last().text.contains("Deal agreed"))
+    }
+
+    @Test
+    fun `new booking opens a chat with the opening offer`() = runTest {
+        MockCarPoolStore.updateUser { it.copy(previewAsBasic = false) }
+        val created = MockCarPoolStore.createBooking(
+            CreateBookingRequest(
+                rideId = "R-002",
+                seatsRequested = 1,
+                proposedFarePerSeatPkr = null,
+                pickupPoint = "DHA Phase 6",
+                dropoffPoint = "Autobhan Road",
+                note = "",
+            )
+        ).getOrThrow()
+        val convo = MockCarPoolStore.conversationsFlow.value.first { it.bookingId == created.id }
+        assertEquals(created.offers.last().id, convo.messages.last().offerId)
+    }
+
+    @Test
     fun `publish ride validates capacity and female only locks audience to verified only`() = runTest {
         val badResult = MockCarPoolStore.publishRide(
             CreateRideRequest(

@@ -67,48 +67,89 @@ fun ExploreScreen(
         contentPadding = PaddingValues(horizontal = AppSpacing.screenPadding, vertical = AppSpacing.s16),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.s16),
     ) {
-        // Greeting, Verification Badge, Bell & Role Switch Header
+        // Gradient hero: greeting, notifications and mode switch
         item(key = "explore_header", contentType = "header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .enterAnimation(index = 0)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(AppGradients.Brand),
             ) {
-                Column(modifier = Modifier.weight(1f).padding(end = AppSpacing.s8)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 50.dp, y = (-40).dp)
+                        .size(170.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.08f)),
+                )
+                Icon(
+                    imageVector = Icons.Rounded.DirectionsCar,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.12f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = AppSpacing.s16, bottom = AppSpacing.s8)
+                        .size(72.dp)
+                        .floating(amplitude = 4.dp),
+                )
+                Column(modifier = Modifier.padding(AppSpacing.s20)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RoleModePill(
+                            activeRole = state.user.activeRole,
+                            onToggle = onSwitchRole,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        IconButton(
+                            onClick = onOpenNotifications,
+                            modifier = Modifier.minimumInteractiveComponentSize().testTag("explore_notifications_button"),
+                        ) {
+                            if (unreadNotifCount > 0) {
+                                BadgedBox(badge = { Badge(containerColor = AppColors.Accent, contentColor = AppColors.TextPrimary) { Text("$unreadNotifCount") } }) {
+                                    Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
+                            } else {
+                                Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(AppSpacing.s16))
                     Text(
-                        text = "Assalam-o-Alaikum, ${state.user.name.substringBefore(" ")}",
+                        text = "Assalam-o-Alaikum, ${state.user.name.substringBefore(" ")} 👋",
                         style = AppTextStyles.screenTitle,
-                        color = AppColors.TextPrimary,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(AppSpacing.s4))
-                    VerificationBadgeChip(
-                        isVerified = state.user.isEffectivelyVerified,
-                        label = state.user.effectiveVerificationLevel.label,
+                    Text(
+                        text = "Where are you heading today?",
+                        style = AppTextStyles.body,
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
+                    Spacer(Modifier.height(AppSpacing.s12))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.18f))
                             .clickable(onClick = onOpenVerification)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                             .testTag("explore_verification_badge"),
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AppSpacing.s4)) {
-                    IconButton(
-                        onClick = onOpenNotifications,
-                        modifier = Modifier.minimumInteractiveComponentSize().testTag("explore_notifications_button"),
                     ) {
-                        if (unreadNotifCount > 0) {
-                            BadgedBox(badge = { Badge(containerColor = AppColors.Error) { Text("$unreadNotifCount") } }) {
-                                Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = AppColors.TextPrimary, modifier = Modifier.size(24.dp))
-                            }
-                        } else {
-                            Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = AppColors.TextPrimary, modifier = Modifier.size(24.dp))
-                        }
+                        Icon(
+                            imageVector = if (state.user.isEffectivelyVerified) Icons.Rounded.Verified else Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (state.user.isEffectivelyVerified) state.user.effectiveVerificationLevel.label else "Not verified • Tap to verify",
+                            style = AppTextStyles.chip,
+                            color = Color.White,
+                        )
                     }
-                    RoleModePill(
-                        activeRole = state.user.activeRole,
-                        onToggle = onSwitchRole,
-                    )
                 }
             }
         }
@@ -148,37 +189,9 @@ fun ExploreScreen(
             }
         }
 
-        // Basic mode verification prompt
-        if (!state.user.isEffectivelyVerified) {
-            item(key = "explore_verify_prompt", contentType = "banner") {
-                RaahiCard(
-                    onClick = onOpenVerification,
-                    containerColor = AppColors.Surface,
-                    elevated = false,
-                    modifier = Modifier.fillMaxWidth().testTag("explore_verify_prompt"),
-                ) {
-                    Row(modifier = Modifier.padding(AppSpacing.cardPadding), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(AppColors.PrimarySoft),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = AppColors.Primary, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(Modifier.width(AppSpacing.s12))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Basic Account (Not Verified)", style = AppTextStyles.cardTitle, color = AppColors.TextPrimary)
-                            Text("Verify CNIC & Selfie to unlock Verified-Only rides.", style = AppTextStyles.caption, color = AppColors.TextSecondary)
-                        }
-                        Spacer(Modifier.width(AppSpacing.s8))
-                        Text("Verify", style = AppTextStyles.button, color = AppColors.Primary)
-                    }
-                }
-            }
-        }
-
         // ONE Clean Unified White Search Card
         item(key = "explore_search_card", contentType = "search_card") {
-            RaahiCard(modifier = Modifier.fillMaxWidth()) {
+            RaahiCard(modifier = Modifier.fillMaxWidth().enterAnimation(index = 1)) {
                 Column(modifier = Modifier.padding(AppSpacing.cardPadding)) {
                     Text(
                         text = "Where are you going?",
@@ -265,11 +278,10 @@ fun ExploreScreen(
                             3 to MockDataFactory.dateLabelForOffset(3),
                         )
                         dateOptions.forEach { (offset, label) ->
-                            FilterChip(
+                            SelectablePill(
+                                text = label,
                                 selected = state.searchQuery.dateDayOffset == offset,
                                 onClick = { onUpdateQuery { it.copy(dateDayOffset = offset) } },
-                                label = { Text(label, style = AppTextStyles.chip, maxLines = 1) },
-                                shape = RoundedCornerShape(50),
                             )
                         }
                     }
@@ -306,7 +318,7 @@ fun ExploreScreen(
                     Spacer(Modifier.height(AppSpacing.s16))
 
                     RaahiPrimaryButton(
-                        text = "Search rides",
+                        text = "Find rides",
                         icon = Icons.Rounded.Search,
                         onClick = onSearchClicked,
                         modifier = Modifier.testTag("explore_search_button"),
@@ -330,7 +342,7 @@ fun ExploreScreen(
                         Icon(Icons.Rounded.Handshake, contentDescription = null, tint = AppColors.AccentOnSoft, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(AppSpacing.s12))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Counter-offer awaiting your reply", style = AppTextStyles.cardTitle, color = AppColors.AccentOnSoft)
+                            Text("New fare offer — reply in chat", style = AppTextStyles.cardTitle, color = AppColors.AccentOnSoft)
                             Text(
                                 text = "${ride?.originCity ?: ""} → ${ride?.destinationCity ?: ""} • ${activeNegotiation.offerExpiryLabel}",
                                 style = AppTextStyles.caption,

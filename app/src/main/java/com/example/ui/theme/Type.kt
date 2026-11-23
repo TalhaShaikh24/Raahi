@@ -16,16 +16,31 @@ val InterFontFamily = FontFamily(
     Font(R.font.inter, FontWeight.Bold),
 )
 
+// Display family for headings: friendlier, rounder letterforms for titles and prices
+val JakartaFontFamily = FontFamily(
+    Font(R.font.plus_jakarta_sans, FontWeight.Medium),
+    Font(R.font.plus_jakarta_sans, FontWeight.SemiBold),
+    Font(R.font.plus_jakarta_sans, FontWeight.Bold),
+    Font(R.font.plus_jakarta_sans, FontWeight.ExtraBold),
+)
+
 object AppTextStyles {
+    val display = TextStyle(
+        fontFamily = JakartaFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.6).sp,
+    )
     val screenTitle = TextStyle(
-        fontFamily = InterFontFamily,
+        fontFamily = JakartaFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        lineHeight = 30.sp,
+        fontSize = 24.sp,
+        lineHeight = 31.sp,
         letterSpacing = (-0.3).sp,
     )
     val sectionTitle = TextStyle(
-        fontFamily = InterFontFamily,
+        fontFamily = JakartaFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 25.sp,
@@ -67,7 +82,7 @@ object AppTextStyles {
         lineHeight = 20.sp,
     )
     val price = TextStyle(
-        fontFamily = InterFontFamily,
+        fontFamily = JakartaFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 18.sp,
         lineHeight = 24.sp,

@@ -1,6 +1,20 @@
 package com.example.ui
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -18,12 +32,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,6 +49,7 @@ import androidx.navigation.navArgument
 import com.example.model.AppNotification
 import com.example.model.AppRole
 import com.example.model.BookingStatus
+import com.example.ui.components.RaahiMotion
 import com.example.ui.screens.*
 import com.example.ui.theme.AppColors
 import com.example.ui.theme.AppSpacing
@@ -104,8 +121,6 @@ fun RaahiApp(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
-    var pendingNavigateToWizard by remember { mutableStateOf(false) }
-
     LaunchedEffect(state.snackbarMessage) {
         val msg = state.snackbarMessage
         if (msg != null) {
@@ -114,57 +129,55 @@ fun RaahiApp(
         }
     }
 
-    LaunchedEffect(state.entryStage, pendingNavigateToWizard) {
-        if (state.entryStage == EntryStage.APP_READY && pendingNavigateToWizard) {
-            pendingNavigateToWizard = false
-            navController.navigate(RaahiRoutes.ROUTE_VERIFICATION_WIZARD) {
-                launchSingleTop = true
-            }
-        }
-    }
-
-    when (state.entryStage) {
-        EntryStage.SPLASH -> {
-            SplashScreen(onFinished = viewModel::finishSplash)
-            return
-        }
-        EntryStage.ONBOARDING -> {
-            OnboardingScreen(
+    AnimatedContent(
+        targetState = state.entryStage,
+        transitionSpec = {
+            (fadeIn(tween(RaahiMotion.LONG)) + slideInHorizontally(tween(RaahiMotion.LONG)) { it / 5 })
+                .togetherWith(fadeOut(tween(RaahiMotion.MEDIUM)) + slideOutHorizontally(tween(RaahiMotion.MEDIUM)) { -it / 5 })
+        },
+        label = "entryStage",
+    ) { stage ->
+        when (stage) {
+            EntryStage.SPLASH -> SplashScreen(onFinished = viewModel::finishSplash)
+            EntryStage.ONBOARDING -> OnboardingScreen(
                 onFinishSlides = viewModel::finishOnboardingSlides,
                 onExploreDemoDirectly = viewModel::skipToDemoApp,
             )
-            return
-        }
-        EntryStage.OTP_LOGIN -> {
-            OtpLoginScreen(
+            EntryStage.OTP_LOGIN -> OtpLoginScreen(
                 initialPhone = state.user.phone,
                 onOtpVerified = viewModel::completeOtpLogin,
                 onSkipToDemo = viewModel::skipToDemoApp,
             )
-            return
-        }
-        EntryStage.PROFILE_SETUP -> {
-            ProfileSetupScreen(
+            EntryStage.NAME_SETUP -> NameSetupScreen(
                 initialName = state.user.name,
-                initialDob = state.user.dob,
-                initialGender = state.user.gender,
-                initialEmergencyName = state.user.emergencyContactName,
-                initialEmergencyPhone = state.user.emergencyContactPhone,
-                onComplete = viewModel::completeProfileSetup,
+                onComplete = viewModel::completeQuickSignUp,
             )
-            return
-        }
-        EntryStage.CHOOSE_MODE -> {
-            ChooseVerificationModeScreen(
-                onContinueAsBasic = viewModel::continueAsBasic,
-                onGetVerified = {
-                    pendingNavigateToWizard = true
-                    viewModel.startVerificationFromChooser()
-                },
+            EntryStage.APP_READY -> RaahiMainShell(
+                state = state,
+                viewModel = viewModel,
+                navController = navController,
+                snackbarHostState = snackbarHostState,
             )
-            return
         }
-        EntryStage.APP_READY -> Unit
+    }
+}
+
+@Composable
+private fun RaahiMainShell(
+    state: CarPoolUiState,
+    viewModel: CarPoolViewModel,
+    navController: NavHostController,
+    snackbarHostState: SnackbarHostState,
+) {
+    /** Bookings are negotiated inside the chat with the other person. */
+    fun openDealChat(bookingId: String) {
+        val convoId = viewModel.openConversationForBooking(bookingId)
+        if (convoId != null) {
+            navController.navigate(RaahiRoutes.chat(convoId)) { launchSingleTop = true }
+        } else {
+            // Fallback: the standalone offer timeline screen
+            navController.navigate(RaahiRoutes.negotiation(bookingId))
+        }
     }
 
     fun handleNotificationNavigation(notif: AppNotification) {
@@ -176,7 +189,7 @@ fun RaahiApp(
                     viewModel.switchRole(AppRole.DRIVER)
                 }
                 when (booking?.status) {
-                    BookingStatus.NEGOTIATING -> navController.navigate(RaahiRoutes.negotiation(notif.targetBookingId))
+                    BookingStatus.NEGOTIATING, BookingStatus.PENDING -> openDealChat(notif.targetBookingId)
                     BookingStatus.ONGOING -> navController.navigate(RaahiRoutes.liveRide(notif.targetBookingId))
                     else -> navController.navigate(RaahiRoutes.bookingDetails(notif.targetBookingId))
                 }
@@ -212,7 +225,11 @@ fun RaahiApp(
                 WindowInsets(0, 0, 0, 0)
             },
             bottomBar = {
-                if (showBottomBar && !useNavRail) {
+                AnimatedVisibility(
+                    visible = showBottomBar && !useNavRail,
+                    enter = slideInVertically(tween(RaahiMotion.MEDIUM)) { it } + fadeIn(),
+                    exit = slideOutVertically(tween(RaahiMotion.SHORT)) { it } + fadeOut(),
+                ) {
                     Column(modifier = Modifier.background(AppColors.Surface)) {
                         HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
                         NavigationBar(
@@ -292,6 +309,38 @@ fun RaahiApp(
                     NavHost(
                         navController = navController,
                         startDestination = RaahiRoutes.ROUTE_EXPLORE,
+                        enterTransition = {
+                            if (initialState.destination.route in topLevelRoutes && targetState.destination.route in topLevelRoutes) {
+                                fadeIn(tween(RaahiMotion.SHORT)) + scaleIn(tween(RaahiMotion.MEDIUM), initialScale = 0.97f)
+                            } else {
+                                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(RaahiMotion.MEDIUM)) { it / 3 } +
+                                    fadeIn(tween(RaahiMotion.MEDIUM))
+                            }
+                        },
+                        exitTransition = {
+                            if (initialState.destination.route in topLevelRoutes && targetState.destination.route in topLevelRoutes) {
+                                fadeOut(tween(RaahiMotion.SHORT))
+                            } else {
+                                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(RaahiMotion.MEDIUM)) { it / 6 } +
+                                    fadeOut(tween(RaahiMotion.SHORT))
+                            }
+                        },
+                        popEnterTransition = {
+                            if (initialState.destination.route in topLevelRoutes && targetState.destination.route in topLevelRoutes) {
+                                fadeIn(tween(RaahiMotion.SHORT))
+                            } else {
+                                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(RaahiMotion.MEDIUM)) { it / 6 } +
+                                    fadeIn(tween(RaahiMotion.MEDIUM))
+                            }
+                        },
+                        popExitTransition = {
+                            if (initialState.destination.route in topLevelRoutes && targetState.destination.route in topLevelRoutes) {
+                                fadeOut(tween(RaahiMotion.SHORT))
+                            } else {
+                                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(RaahiMotion.MEDIUM)) { it / 3 } +
+                                    fadeOut(tween(RaahiMotion.SHORT))
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .widthIn(max = 720.dp),
@@ -306,7 +355,7 @@ fun RaahiApp(
                                     onAcceptRequest = viewModel::acceptDriverRequest,
                                     onRejectRequest = viewModel::rejectDriverRequest,
                                     onOpenNegotiation = { bookingId ->
-                                        navController.navigate(RaahiRoutes.negotiation(bookingId))
+                                        openDealChat(bookingId)
                                     },
                                     onRideClick = { rideId ->
                                         navController.navigate(RaahiRoutes.rideDetails(rideId))
@@ -334,7 +383,7 @@ fun RaahiApp(
                                         navController.navigate(RaahiRoutes.ROUTE_PUBLISH_RIDE)
                                     },
                                     onOpenNegotiation = { bookingId ->
-                                        navController.navigate(RaahiRoutes.negotiation(bookingId))
+                                        openDealChat(bookingId)
                                     },
                                     onOpenVerification = { navController.navigate(RaahiRoutes.ROUTE_VERIFICATION_WIZARD) },
                                     onOpenNotifications = { navController.navigate(RaahiRoutes.ROUTE_NOTIFICATIONS) },
@@ -353,7 +402,7 @@ fun RaahiApp(
                                     navController.navigate(RaahiRoutes.bookingDetails(bookingId))
                                 },
                                 onOpenNegotiation = { bookingId ->
-                                    navController.navigate(RaahiRoutes.negotiation(bookingId))
+                                    openDealChat(bookingId)
                                 },
                                 onOpenLiveRide = { bookingId ->
                                     navController.navigate(RaahiRoutes.liveRide(bookingId))
@@ -477,7 +526,9 @@ fun RaahiApp(
                                 onBack = { navController.popBackStack() },
                                 onSubmitBooking = { req ->
                                     viewModel.createBooking(req) { created ->
-                                        navController.navigate(RaahiRoutes.negotiation(created.id)) {
+                                        val convoId = viewModel.openConversationForBooking(created.id)
+                                        val target = if (convoId != null) RaahiRoutes.chat(convoId) else RaahiRoutes.negotiation(created.id)
+                                        navController.navigate(target) {
                                             popUpTo(RaahiRoutes.ROUTE_EXPLORE)
                                         }
                                     }
@@ -519,7 +570,7 @@ fun RaahiApp(
                                 state = state,
                                 onBack = { navController.popBackStack() },
                                 onOpenNegotiation = { bId ->
-                                    navController.navigate(RaahiRoutes.negotiation(bId))
+                                    openDealChat(bId)
                                 },
                                 onOpenChat = { bId ->
                                     val convoId = viewModel.openConversationForBooking(bId)
@@ -566,7 +617,7 @@ fun RaahiApp(
                                 onAcceptRequest = viewModel::acceptDriverRequest,
                                 onRejectRequest = viewModel::rejectDriverRequest,
                                 onOpenNegotiation = { bId ->
-                                    navController.navigate(RaahiRoutes.negotiation(bId))
+                                    openDealChat(bId)
                                 },
                             )
                         }
@@ -595,6 +646,14 @@ fun RaahiApp(
                                     viewModel.blockUser(userId, name, initials, "Blocked from chat")
                                 },
                                 onShowMessage = viewModel::showMessage,
+                                onRespondToOffer = viewModel::respondToPendingOffer,
+                                onSubmitCounterOffer = { bId, actor, amount, note ->
+                                    viewModel.submitCounterOffer(bId, actor, amount, note)
+                                },
+                                onFindAnotherRide = {
+                                    viewModel.switchRole(AppRole.PASSENGER)
+                                    navController.navigate(RaahiRoutes.ROUTE_SEARCH_RESULTS)
+                                },
                             )
                         }
 
@@ -974,11 +1033,22 @@ private fun RowScope.TopLevelTabs(
 @Composable
 private fun TabBadgeIcon(tab: TabSpec, selected: Boolean) {
     val icon = if (selected) tab.selectedIcon else tab.unselectedIcon
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.18f else 1f,
+        animationSpec = spring(dampingRatio = 0.4f, stiffness = 420f),
+        label = "tabIconScale",
+    )
+    val iconModifier = Modifier
+        .size(24.dp)
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
     if (tab.badgeCount > 0) {
         BadgedBox(badge = { Badge(containerColor = AppColors.Error) { Text("${tab.badgeCount}") } }) {
-            Icon(icon, contentDescription = tab.label, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = tab.label, modifier = iconModifier)
         }
     } else {
-        Icon(icon, contentDescription = tab.label, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = tab.label, modifier = iconModifier)
     }
 }

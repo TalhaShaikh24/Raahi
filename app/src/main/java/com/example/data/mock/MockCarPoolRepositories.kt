@@ -275,6 +275,14 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
             body = "${ride.originCity} → ${ride.destinationCity} (${Formatters.formatPkr(proposed ?: ride.pricePerSeatPkr)}/seat).",
             targetBookingId = newBooking.id,
         )
+        val openingOffer = offers.last()
+        postDealEventToChat(
+            booking = newBooking,
+            text = openingOffer.note,
+            offerId = openingOffer.id,
+            fromMe = true,
+            senderName = user.name,
+        )
         return Result.success(newBooking)
     }
 
@@ -304,6 +312,7 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
             body = "${booking.passengerName} confirmed for ${Formatters.formatSeats(booking.seatsRequested)} at ${Formatters.formatPkr(pendingAmount)}/seat.",
             targetBookingId = updatedBooking.id,
         )
+        postDealEventToChat(updatedBooking, "Deal agreed at ${Formatters.formatPkr(pendingAmount)}/seat")
         return Result.success(updatedBooking)
     }
 
@@ -315,6 +324,7 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
         }
         val updatedBooking = booking.copy(status = BookingStatus.REJECTED, offerExpiryLabel = "Declined", offers = updatedOffers)
         updateBookingOnly(updatedBooking)
+        postDealEventToChat(updatedBooking, "Request declined")
         pushNotification(
             type = NotificationType.BOOKING_CANCELLED,
             title = "Request declined",
@@ -363,6 +373,14 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
             offers = archivedOffers + nextOffer,
         )
         updateBookingOnly(updatedBooking)
+        val offerFromMe = if (booking.isIncomingDriverRequest) actor == OfferActor.DRIVER else actor == OfferActor.PASSENGER
+        postDealEventToChat(
+            booking = updatedBooking,
+            text = nextOffer.note,
+            offerId = nextOffer.id,
+            fromMe = offerFromMe,
+            senderName = actorDisplayName,
+        )
         pushNotification(
             type = NotificationType.COUNTER_OFFER,
             title = "New counter-offer (${Formatters.formatPkr(amountPerSeatPkr)})",
@@ -401,6 +419,7 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
                     body = "Agreed fare: ${Formatters.formatPkr(pendingOffer.amountPerSeatPkr)}/seat for ${ride.originCity} → ${ride.destinationCity}.",
                     targetBookingId = updatedBooking.id,
                 )
+                postDealEventToChat(updatedBooking, "Deal agreed at ${Formatters.formatPkr(pendingOffer.amountPerSeatPkr)}/seat")
                 Result.success(updatedBooking)
             }
             OfferAction.REJECT -> {
@@ -415,6 +434,7 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
                     body = "The offer of ${Formatters.formatPkr(pendingOffer.amountPerSeatPkr)}/seat was declined.",
                     targetBookingId = updatedBooking.id,
                 )
+                postDealEventToChat(updatedBooking, "Offer of ${Formatters.formatPkr(pendingOffer.amountPerSeatPkr)}/seat declined")
                 Result.success(updatedBooking)
             }
         }
@@ -847,11 +867,46 @@ object MockCarPoolStore : RideRepository, BookingRepository, UserRepository, Inb
             unreadCount = 0,
             lastMessageTime = "New",
             messages = listOf(
-                ChatMessage("M-${idCounter.incrementAndGet()}", "System", false, "Demo chat started for ${ride.originCity} → ${ride.destinationCity}. Personal numbers are masked for privacy.", "Now"),
+                ChatMessage(
+                    id = "M-${idCounter.incrementAndGet()}",
+                    senderName = "Raahi",
+                    isFromMe = false,
+                    text = "Chat started for ${ride.originCity} → ${ride.destinationCity}. Agree on a fare right here.",
+                    timestampLabel = "Now",
+                    isSystem = true,
+                ),
             ),
         )
         _conversationsFlow.update { listOf(newConvo) + it }
         return newId
+    }
+
+    /**
+     * Mirrors negotiation events into the booking's chat thread so drivers and passengers
+     * can talk and agree on a fare in one place.
+     */
+    private fun postDealEventToChat(
+        booking: Booking,
+        text: String,
+        offerId: String? = null,
+        fromMe: Boolean = false,
+        senderName: String = "Raahi",
+    ) {
+        val convoId = openOrCreateConversationForBooking(booking.id) ?: return
+        val msg = ChatMessage(
+            id = "M-${idCounter.incrementAndGet()}",
+            senderName = senderName,
+            isFromMe = fromMe,
+            text = text,
+            timestampLabel = "Just now",
+            offerId = offerId,
+            isSystem = offerId == null,
+        )
+        _conversationsFlow.update { convos ->
+            convos.map { convo ->
+                if (convo.id == convoId) convo.copy(messages = convo.messages + msg, lastMessageTime = "Just now") else convo
+            }
+        }
     }
 
     private fun pushNotification(

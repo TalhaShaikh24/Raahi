@@ -267,6 +267,10 @@ data class ChatMessage(
     val isFromMe: Boolean,
     val text: String,
     val timestampLabel: String,
+    /** When set, this message is a fare offer card that lives inside the chat thread. */
+    val offerId: String? = null,
+    /** System events (deal agreed, request declined) render as centred pills. */
+    val isSystem: Boolean = false,
 )
 
 @Immutable

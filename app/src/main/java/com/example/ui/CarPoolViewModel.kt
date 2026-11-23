@@ -17,8 +17,7 @@ enum class EntryStage {
     SPLASH,
     ONBOARDING,
     OTP_LOGIN,
-    PROFILE_SETUP,
-    CHOOSE_MODE,
+    NAME_SETUP,
     APP_READY,
 }
 
@@ -250,38 +249,24 @@ class CarPoolViewModel(
 
     fun completeOtpLogin(phone: String) {
         MockCarPoolStore.updateUser { it.copy(phone = phone.ifBlank { "+92 300 5550192" }) }
-        _entryStage.value = EntryStage.PROFILE_SETUP
-        showMessage("OTP verified (demo)")
+        _entryStage.value = EntryStage.NAME_SETUP
     }
 
-    fun completeProfileSetup(
-        name: String,
-        dob: String,
-        gender: String,
-        emergencyName: String,
-        emergencyPhone: String,
-    ) {
-        val initials = name.trim().split(" ")
+    /**
+     * Last sign-up step: only a name is needed to start. Date of birth, gender, emergency
+     * contacts and ID verification are asked for later, when a feature actually needs them.
+     */
+    fun completeQuickSignUp(name: String) {
+        val cleanName = name.trim().ifBlank { "Raahi Member" }
+        val initials = cleanName.split(" ")
             .filter { it.isNotBlank() }
             .take(2)
             .joinToString("") { it.first().uppercase() }
-            .ifBlank { "DR" }
+            .ifBlank { "RM" }
         MockCarPoolStore.updateUser {
             it.copy(
-                name = name.trim(),
+                name = cleanName,
                 initials = initials,
-                dob = dob,
-                gender = gender,
-                emergencyContactName = emergencyName.trim(),
-                emergencyContactPhone = emergencyPhone.trim(),
-            )
-        }
-        _entryStage.value = EntryStage.CHOOSE_MODE
-    }
-
-    fun continueAsBasic() {
-        MockCarPoolStore.updateUser {
-            it.copy(
                 isVerified = false,
                 verificationLevel = VerificationLevel.BASIC,
                 verificationStatus = VerificationStatus.NOT_STARTED,
@@ -292,12 +277,7 @@ class CarPoolViewModel(
             )
         }
         _entryStage.value = EntryStage.APP_READY
-        showMessage("Entered as Basic (Not Verified)")
-    }
-
-    fun startVerificationFromChooser() {
-        MockCarPoolStore.updateUser { it.copy(previewAsBasic = false) }
-        _entryStage.value = EntryStage.APP_READY
+        showMessage("Welcome to Raahi, ${cleanName.substringBefore(" ")}!")
     }
 
     fun skipToDemoApp() {
@@ -362,9 +342,9 @@ class CarPoolViewModel(
                 onSuccess = { booking ->
                     showMessage(
                         if (booking.status == BookingStatus.NEGOTIATING) {
-                            "Counter-offer sent! Track it in the negotiation timeline."
+                            "Offer sent! Keep chatting with the driver here."
                         } else {
-                            "Booking request sent to driver."
+                            "Request sent! Say salam to your driver."
                         }
                     )
                     onCreated(booking)
@@ -395,10 +375,10 @@ class CarPoolViewModel(
         viewModelScope.launch {
             bookingRepo.submitCounterOffer(bookingId, actor, amountPerSeatPkr, note).fold(
                 onSuccess = {
-                    showMessage("Counter-offer submitted.")
+                    showMessage("Offer sent.")
                     onSuccess()
                 },
-                onFailure = { err -> showMessage(err.message ?: "Invalid counter-offer.") },
+                onFailure = { err -> showMessage(err.message ?: "Please enter a valid offer.") },
             )
         }
     }

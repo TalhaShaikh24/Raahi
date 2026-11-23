@@ -1,6 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -410,10 +415,8 @@ private fun CounterOfferComposerSheet(
 
 private enum class TripFilterTab(val label: String) {
     UPCOMING("Upcoming"),
-    PENDING("Pending"),
-    COMPLETED("Completed"),
-    WAITLIST("Waitlist"),
-    CANCELLED("Cancelled"),
+    PENDING("Requests"),
+    PAST("Past"),
 }
 
 @Composable
@@ -433,22 +436,18 @@ fun MyTripsScreen(
     val tabCounts = remember(state.passengerBookings, state.waitlist.size) {
         var upcoming = 0
         var pending = 0
-        var completed = 0
-        var cancelled = 0
+        var past = 0
         for (booking in state.passengerBookings) {
             when (booking.status) {
                 BookingStatus.CONFIRMED, BookingStatus.ONGOING -> upcoming++
                 BookingStatus.PENDING, BookingStatus.NEGOTIATING -> pending++
-                BookingStatus.COMPLETED -> completed++
-                BookingStatus.CANCELLED, BookingStatus.REJECTED -> cancelled++
+                BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.REJECTED -> past++
             }
         }
         mapOf(
             TripFilterTab.UPCOMING to upcoming,
             TripFilterTab.PENDING to pending,
-            TripFilterTab.COMPLETED to completed,
-            TripFilterTab.WAITLIST to state.waitlist.size,
-            TripFilterTab.CANCELLED to cancelled,
+            TripFilterTab.PAST to past,
         )
     }
 
@@ -456,9 +455,9 @@ fun MyTripsScreen(
         when (selectedTab) {
             TripFilterTab.UPCOMING -> state.passengerBookings.filter { it.status == BookingStatus.CONFIRMED || it.status == BookingStatus.ONGOING }
             TripFilterTab.PENDING -> state.passengerBookings.filter { it.status == BookingStatus.PENDING || it.status == BookingStatus.NEGOTIATING }
-            TripFilterTab.COMPLETED -> state.passengerBookings.filter { it.status == BookingStatus.COMPLETED }
-            TripFilterTab.WAITLIST -> emptyList()
-            TripFilterTab.CANCELLED -> state.passengerBookings.filter { it.status == BookingStatus.CANCELLED || it.status == BookingStatus.REJECTED }
+            TripFilterTab.PAST -> state.passengerBookings.filter {
+                it.status == BookingStatus.COMPLETED || it.status == BookingStatus.CANCELLED || it.status == BookingStatus.REJECTED
+            }
         }
     }
 
@@ -466,72 +465,25 @@ fun MyTripsScreen(
         Column(modifier = Modifier.padding(horizontal = AppSpacing.screenPadding, vertical = AppSpacing.s16)) {
             Text("My Rides", style = AppTextStyles.screenTitle, color = AppColors.TextPrimary)
             Spacer(Modifier.height(AppSpacing.s4))
-            Text("Track bookings, counter-offers, live rides, and waitlist", style = AppTextStyles.bodyCompact, color = AppColors.TextSecondary)
+            Text("Your bookings and requests", style = AppTextStyles.bodyCompact, color = AppColors.TextSecondary)
+            Spacer(Modifier.height(AppSpacing.s16))
+            TripsSegmentedControl(
+                selected = selectedTab,
+                counts = tabCounts,
+                onSelect = { selectedTab = it },
+            )
         }
 
-        ScrollableTabRow(
-            selectedTabIndex = selectedTab.ordinal,
-            edgePadding = AppSpacing.screenPadding,
-            containerColor = AppColors.Surface,
-            contentColor = AppColors.Primary,
-            divider = { HorizontalDivider(color = AppColors.Border, thickness = 1.dp) },
-        ) {
-            TripFilterTab.entries.forEach { tab ->
-                val count = tabCounts[tab] ?: 0
-                Tab(
-                    selected = selectedTab == tab,
-                    onClick = { selectedTab = tab },
-                    text = {
-                        Text(
-                            text = "${tab.label} ($count)",
-                            style = AppTextStyles.chip,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    },
-                    modifier = Modifier.testTag("trips_tab_${tab.name.lowercase()}"),
-                )
-            }
-        }
-
-        if (selectedTab == TripFilterTab.WAITLIST) {
-            if (state.waitlist.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(AppSpacing.screenPadding), contentAlignment = Alignment.Center) {
-                    EmptyStateView(
-                        icon = Icons.Rounded.HourglassEmpty,
-                        title = "No waitlisted rides",
-                        subtitle = "When a ride is full, tap Join Waitlist on Ride Details to track it here.",
-                        actionLabel = "Explore rides",
-                        onAction = onExploreRides,
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = AppSpacing.screenPadding, vertical = AppSpacing.s16),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap),
-                ) {
-                    items(
-                        items = state.waitlist,
-                        key = { it.id },
-                        contentType = { "waitlist_card" },
-                    ) { entry ->
-                        val ride = state.ridesById[entry.rideId]
-                        WaitlistTripCard(
-                            entry = entry,
-                            ride = ride,
-                            onOpenRideDetail = onOpenRideDetail,
-                            onLeaveWaitlist = onLeaveWaitlist,
-                        )
-                    }
-                }
-            }
-        } else if (filteredBookings.isEmpty()) {
+        if (filteredBookings.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(AppSpacing.screenPadding), contentAlignment = Alignment.Center) {
                 EmptyStateView(
                     icon = Icons.Rounded.Commute,
-                    title = "No ${selectedTab.label.lowercase()} trips",
-                    subtitle = "Explore upcoming intercity and local carpools to book a seat.",
+                    title = when (selectedTab) {
+                        TripFilterTab.UPCOMING -> "No upcoming rides"
+                        TripFilterTab.PENDING -> "No open requests"
+                        TripFilterTab.PAST -> "No past rides yet"
+                    },
+                    subtitle = "Find a driver going your way and book a seat in a few taps.",
                     actionLabel = "Find a ride",
                     onAction = onExploreRides,
                 )
@@ -550,6 +502,7 @@ fun MyTripsScreen(
                     val ride = state.ridesById[booking.rideId]
                     val driver = ride?.let { state.driversById[it.driverId] }
                     TripBookingCard(
+                        modifier = Modifier.animateItem(),
                         booking = booking,
                         ride = ride,
                         driverName = driver?.name ?: "Driver",
@@ -558,6 +511,72 @@ fun MyTripsScreen(
                         onOpenLiveRide = onOpenLiveRide,
                         onOpenRateReview = onOpenRateReview,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TripsSegmentedControl(
+    selected: TripFilterTab,
+    counts: Map<TripFilterTab, Int>,
+    onSelect: (TripFilterTab) -> Unit,
+) {
+    val tabs = TripFilterTab.entries
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(50))
+            .background(AppColors.SurfaceSubtle)
+            .padding(4.dp),
+    ) {
+        val segmentWidth = maxWidth / tabs.size
+        val indicatorOffset by animateDpAsState(
+            targetValue = segmentWidth * selected.ordinal,
+            animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
+            label = "segmentIndicator",
+        )
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .shadow(4.dp, RoundedCornerShape(50))
+                .clip(RoundedCornerShape(50))
+                .background(AppColors.Surface),
+        )
+        Row(modifier = Modifier.fillMaxSize()) {
+            tabs.forEach { tab ->
+                val isSelected = tab == selected
+                val textColor by animateColorAsState(
+                    if (isSelected) AppColors.Primary else AppColors.TextSecondary,
+                    label = "segmentText",
+                )
+                val count = counts[tab] ?: 0
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .clickable { onSelect(tab) }
+                        .testTag("trips_tab_${tab.name.lowercase()}"),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(tab.label, style = AppTextStyles.chip, color = textColor, maxLines = 1)
+                    if (count > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (isSelected) AppColors.Primary else AppColors.Border)
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        ) {
+                            Text("$count", style = AppTextStyles.chip, color = if (isSelected) Color.White else AppColors.TextSecondary)
+                        }
+                    }
                 }
             }
         }
@@ -598,6 +617,7 @@ private fun WaitlistTripCard(
 
 @Composable
 private fun TripBookingCard(
+    modifier: Modifier = Modifier,
     booking: Booking,
     ride: Ride?,
     driverName: String,
@@ -618,7 +638,7 @@ private fun TripBookingCard(
     val cardClick = remember(booking.id, booking.status, onOpenNegotiation, onOpenLiveRide, onOpenBooking) {
         {
             when (booking.status) {
-                BookingStatus.NEGOTIATING -> onOpenNegotiation(booking.id)
+                BookingStatus.PENDING, BookingStatus.NEGOTIATING -> onOpenNegotiation(booking.id)
                 BookingStatus.ONGOING -> onOpenLiveRide(booking.id)
                 else -> onOpenBooking(booking.id)
             }
@@ -628,7 +648,7 @@ private fun TripBookingCard(
     RaahiCard(
         onClick = cardClick,
         elevated = false,
-        modifier = Modifier.fillMaxWidth().testTag("trip_booking_card_${booking.id}"),
+        modifier = modifier.fillMaxWidth().testTag("trip_booking_card_${booking.id}"),
     ) {
         Column(modifier = Modifier.padding(AppSpacing.cardPadding), verticalArrangement = Arrangement.spacedBy(AppSpacing.s12)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -658,17 +678,17 @@ private fun TripBookingCard(
                 )
             }
             if (booking.status == BookingStatus.CONFIRMED) {
-                Text("Ride Start OTP: ${booking.rideStartOtp} (share with driver at pickup)", style = AppTextStyles.caption, fontWeight = FontWeight.SemiBold, color = AppColors.PrimaryDark)
+                Text("Ride code: ${booking.rideStartOtp} (show it to your driver at pickup)", style = AppTextStyles.caption, fontWeight = FontWeight.SemiBold, color = AppColors.PrimaryDark)
             } else if (booking.status == BookingStatus.ONGOING) {
                 RaahiPrimaryButton(text = "Open Live Ride", onClick = { onOpenLiveRide(booking.id) })
             } else if (booking.status == BookingStatus.COMPLETED && !booking.isRated) {
                 RaahiSecondaryButton(text = "Rate & Review", onClick = { onOpenRateReview(booking.id) })
-            } else if (booking.status == BookingStatus.NEGOTIATING) {
+            } else if (booking.status == BookingStatus.NEGOTIATING || booking.status == BookingStatus.PENDING) {
                 Surface(shape = RoundedCornerShape(AppSpacing.radiusInput), color = AppColors.AccentSoft, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(AppSpacing.s12), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Handshake, contentDescription = null, tint = AppColors.AccentOnSoft, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Forum, contentDescription = null, tint = AppColors.AccentOnSoft, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(AppSpacing.s8))
-                        Text("Counter-offer active • Tap to respond", style = AppTextStyles.caption, fontWeight = FontWeight.SemiBold, color = AppColors.AccentOnSoft)
+                        Text("Open chat to agree on the fare", style = AppTextStyles.caption, fontWeight = FontWeight.SemiBold, color = AppColors.AccentOnSoft)
                     }
                 }
             }

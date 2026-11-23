@@ -1,9 +1,18 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -46,22 +57,24 @@ fun RaahiCard(
     val shape = RoundedCornerShape(AppSpacing.radiusCard)
     val cardModifier = if (elevated) {
         modifier.shadow(
-            elevation = 4.dp,
+            elevation = 10.dp,
             shape = shape,
-            ambientColor = Color.Black.copy(alpha = 0.06f),
-            spotColor = Color.Black.copy(alpha = 0.06f),
+            ambientColor = AppColors.Ink.copy(alpha = 0.05f),
+            spotColor = AppColors.Ink.copy(alpha = 0.10f),
         )
     } else {
         modifier
     }
     if (onClick != null) {
+        val interactionSource = remember { MutableInteractionSource() }
         Card(
             onClick = onClick,
             shape = shape,
             colors = CardDefaults.cardColors(containerColor = containerColor),
             border = BorderStroke(borderWidth, borderColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            modifier = cardModifier,
+            interactionSource = interactionSource,
+            modifier = cardModifier.pressScale(interactionSource, pressedScale = 0.98f),
             content = content,
         )
     } else {
@@ -87,28 +100,49 @@ fun RaahiPrimaryButton(
     containerColor: Color = AppColors.Primary,
 ) {
     val shape = RoundedCornerShape(AppSpacing.radiusButton)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isActive = enabled && !isLoading
+    val brush: Brush = when {
+        !isActive -> SolidColor(AppColors.SurfaceSubtle)
+        containerColor == AppColors.Primary -> AppGradients.BrandHorizontal
+        containerColor == AppColors.Error -> AppGradients.Danger
+        else -> SolidColor(containerColor)
+    }
+    val glowColor = if (containerColor == AppColors.Error) AppColors.Error else AppColors.Primary
     Button(
         onClick = onClick,
-        enabled = enabled && !isLoading,
+        enabled = isActive,
         shape = shape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
+            containerColor = Color.Transparent,
             contentColor = Color.White,
-            disabledContainerColor = AppColors.SurfaceSubtle,
+            disabledContainerColor = Color.Transparent,
             disabledContentColor = AppColors.TextSecondary,
         ),
         contentPadding = PaddingValues(horizontal = AppSpacing.s16),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = if (enabled) 2.dp else 0.dp,
-            pressedElevation = 0.dp,
-        ),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp, disabledElevation = 0.dp),
+        interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
-            .height(AppSpacing.buttonHeight),
+            .height(AppSpacing.buttonHeight)
+            .pressScale(interactionSource)
+            .then(
+                if (isActive) {
+                    Modifier.shadow(
+                        elevation = 10.dp,
+                        shape = shape,
+                        ambientColor = glowColor.copy(alpha = 0.25f),
+                        spotColor = glowColor.copy(alpha = 0.45f),
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .background(brush, shape),
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                color = Color.White,
+                color = AppColors.Primary,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(20.dp),
             )
@@ -139,10 +173,12 @@ fun RaahiSecondaryButton(
     borderColor: Color = AppColors.Border,
 ) {
     val shape = RoundedCornerShape(AppSpacing.radiusButton)
+    val interactionSource = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         shape = shape,
+        interactionSource = interactionSource,
         border = BorderStroke(1.dp, if (enabled) borderColor else AppColors.Border),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = AppColors.Surface,
@@ -152,7 +188,8 @@ fun RaahiSecondaryButton(
         contentPadding = PaddingValues(horizontal = AppSpacing.s16),
         modifier = modifier
             .fillMaxWidth()
-            .height(AppSpacing.buttonHeight),
+            .height(AppSpacing.buttonHeight)
+            .pressScale(interactionSource),
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -481,9 +518,19 @@ private fun ModeChipItem(
     onClick: () -> Unit,
     testTag: String,
 ) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) AppColors.Primary else Color.Transparent,
+        animationSpec = tween(RaahiMotion.MEDIUM),
+        label = "modeChipBg",
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) Color.White else AppColors.TextSecondary,
+        animationSpec = tween(RaahiMotion.MEDIUM),
+        label = "modeChipFg",
+    )
     Surface(
         shape = RoundedCornerShape(50),
-        color = if (selected) AppColors.Primary else Color.Transparent,
+        color = bg,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClick = onClick)
@@ -492,7 +539,7 @@ private fun ModeChipItem(
         Text(
             text = label,
             style = AppTextStyles.chip,
-            color = if (selected) Color.White else AppColors.TextSecondary,
+            color = fg,
             maxLines = 1,
             softWrap = false,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -601,13 +648,24 @@ fun SeatQuantityStepper(
                 )
             }
         }
-        Text(
-            text = "$seats",
-            style = AppTextStyles.cardTitle,
-            color = AppColors.TextPrimary,
-            textAlign = TextAlign.Center,
+        AnimatedContent(
+            targetState = seats,
+            transitionSpec = {
+                val up = targetState > initialState
+                (slideInVertically { h -> if (up) h else -h } + fadeIn())
+                    .togetherWith(slideOutVertically { h -> if (up) -h else h } + fadeOut())
+            },
+            label = "seatCount",
             modifier = Modifier.widthIn(min = 24.dp),
-        )
+        ) { value ->
+            Text(
+                text = "$value",
+                style = AppTextStyles.price,
+                color = AppColors.TextPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 24.dp),
+            )
+        }
         Surface(
             onClick = { if (seats < maxSeats) onSeatsChange(seats + 1) },
             enabled = seats < maxSeats,
@@ -682,16 +740,17 @@ fun EmptyStateView(
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .floating(amplitude = 4.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
-                    .background(AppColors.PrimarySoft),
+                    .background(AppGradients.SoftMint),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = AppColors.Primary,
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(30.dp),
                 )
             }
             Spacer(Modifier.height(AppSpacing.s16))

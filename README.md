@@ -4,13 +4,13 @@ A polished, local-only Android carpooling marketplace prototype inspired by the 
 
 ## Key Implemented Journeys
 
-- **Welcome & Onboarding**: Hero illustration, "Find a ride", "Offer a ride", and "Explore demo".
-- **Passenger Explore & Search**: Pakistan city/area pickers (Karachi, Hyderabad, Lahore, Islamabad, Rawalpindi), origin/destination swap, date chips, seat stepper, quick recent searches, filter bottom sheet, and sorting.
-- **Ride Details & Booking Request**: Interactive route stop timeline (select pickup & drop-off), driver verification & reviews, vehicle details, listed-fare booking, or proposing a custom PKR counter-offer.
-- **Counter-Offer Negotiation (`B-1001` & custom bookings)**: Chronological offer timeline preserving every prior offer, turn-based Accept / Decline / Counter actions, static demo expiry indicator, and role-switching to test both Passenger and Driver replies.
-- **My Trips & Booking Details**: Segmented tabs (Upcoming, Pending, Completed, Cancelled), fare breakdown, mock chat launch, simulated trip share, and cancellation with seat restoration.
-- **Driver Hub, Publish Ride & Requests**: Role switch pill, quick stats, multi-section Publish Ride form with inline validation and vehicle capacity enforcement, and incoming passenger request management.
-- **Inbox, Notifications, Profile & Safety**: Local demo chat composer, tappable activity notifications, mock garage & saved places, explicit Demo SOS disclaimer, and **Reset demo data**.
+- **Quick sign-up (3 steps)**: Animated splash → one welcome screen → phone + 4-digit code (demo: `1234`) → name only. No role question and no long forms; date of birth, emergency contacts and ID verification are asked for later, when a feature needs them.
+- **Passenger Explore & Search**: Gradient home hero, Pakistan city/area pickers, origin/destination swap, date pills, seat stepper, saved routes, filters and sorting.
+- **Chat & agree on a fare**: Every booking opens a chat with the driver or passenger. A deal panel pinned to the top of the chat shows the current offer with **Accept / Counter / Decline**; each offer appears as a card in the thread, and agreed deals post a "Deal agreed" message. The offer sheet has ± buttons and suggested prices. Use "Demo: reply as driver" to answer as the other side.
+- **Offer a ride (driver)**: 3 quick steps (route, time, seats & price) with a live "you could earn" preview. Car, stops, luggage, preferences and audience are optional under **More options**.
+- **My Rides**: Three tabs (Upcoming, Requests, Past) with an animated segmented control.
+- **Profile**: Essentials up front (mode switch, safety, emergency contacts, help, settings). Favourites, waitlist, payments, promos, earnings and demo tools sit under an expandable **More** section.
+- **Motion & design**: Shared motion tokens (`ui/components/Motion.kt`): press-bounce on buttons and cards, staggered entrance animations, rolling price counters, pulsing status dots, animated screen transitions, and a bottom bar that slides away on detail screens. Headings use Plus Jakarta Sans; primary actions use the brand gradient.
 
 ## Project Structure
 

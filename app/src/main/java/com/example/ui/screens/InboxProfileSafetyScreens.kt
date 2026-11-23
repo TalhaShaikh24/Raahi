@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,13 +22,16 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
@@ -281,238 +291,6 @@ private fun NotificationListItem(
     }
 }
 
-@Composable
-fun ChatScreen(
-    conversationId: String,
-    state: CarPoolUiState,
-    onBack: () -> Unit,
-    onSendMessage: (String, String) -> Unit,
-    onMarkRead: (String) -> Unit,
-    onOpenBooking: (String) -> Unit,
-    onOpenPublicProfile: (String) -> Unit,
-    onReportUser: (String) -> Unit,
-    onBlockUser: (userId: String, name: String, initials: String) -> Unit,
-    onShowMessage: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val conversation = state.conversations.find { it.id == conversationId }
-    var draft by remember { mutableStateOf("") }
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showBlockDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(conversationId) {
-        onMarkRead(conversationId)
-    }
-
-    if (conversation == null) {
-        Scaffold(
-            containerColor = AppColors.Background,
-            topBar = { RaahiTopBar(title = "Chat", onBack = onBack) },
-        ) { pad ->
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
-                Text("Conversation not found.", style = AppTextStyles.body, color = AppColors.TextSecondary)
-            }
-        }
-        return
-    }
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = AppColors.Background,
-        topBar = {
-            RaahiTopBar(
-                title = conversation.counterpartName,
-                subtitle = conversation.rideContext,
-                onBack = onBack,
-                actions = {
-                    IconButton(
-                        onClick = { onShowMessage("Calling via app…") },
-                        modifier = Modifier.minimumInteractiveComponentSize().testTag("chat_masked_call_button"),
-                    ) {
-                        Icon(Icons.Rounded.Call, contentDescription = "Masked in-app call", tint = AppColors.Primary, modifier = Modifier.size(22.dp))
-                    }
-                    if (conversation.bookingId != null) {
-                        TextButton(onClick = { onOpenBooking(conversation.bookingId) }) {
-                            Text("Booking", style = AppTextStyles.button, color = AppColors.Primary, maxLines = 1)
-                        }
-                    }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Rounded.MoreVert, contentDescription = "More chat actions", tint = AppColors.TextPrimary)
-                        }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            if (state.driversById.containsKey(conversation.counterpartId)) {
-                                DropdownMenuItem(
-                                    text = { Text("View Public Profile", style = AppTextStyles.bodyCompact) },
-                                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onOpenPublicProfile(conversation.counterpartId)
-                                    },
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Report user", style = AppTextStyles.bodyCompact) },
-                                leadingIcon = { Icon(Icons.Rounded.Flag, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onReportUser(conversation.counterpartName)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Block user", style = AppTextStyles.bodyCompact, color = AppColors.Error) },
-                                leadingIcon = { Icon(Icons.Rounded.Block, contentDescription = null, tint = AppColors.Error) },
-                                onClick = {
-                                    menuExpanded = false
-                                    showBlockDialog = true
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            Column(modifier = Modifier.background(AppColors.Surface)) {
-                HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .imePadding()
-                        .padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s12),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.s8),
-                ) {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        placeholder = { Text("Write a message...", style = AppTextStyles.bodyCompact, color = AppColors.TextSecondary) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = AppColors.Background,
-                            unfocusedContainerColor = AppColors.Background,
-                            focusedBorderColor = AppColors.Primary,
-                            unfocusedBorderColor = AppColors.Border,
-                        ),
-                        modifier = Modifier.weight(1f).testTag("chat_message_input"),
-                    )
-                    FilledIconButton(
-                        onClick = {
-                            if (draft.isNotBlank()) {
-                                onSendMessage(conversation.id, draft)
-                                draft = ""
-                            }
-                        },
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = AppColors.Primary,
-                            contentColor = Color.White,
-                        ),
-                        modifier = Modifier.size(48.dp).testTag("chat_send_button"),
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Send message", modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = AppSpacing.screenPadding, vertical = AppSpacing.s16),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.s12),
-        ) {
-            item(key = "privacy_banner", contentType = "privacy_banner") {
-                RaahiCard(
-                    containerColor = AppColors.PrimarySoft,
-                    borderColor = AppColors.Primary.copy(alpha = 0.25f),
-                    elevated = false,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(AppSpacing.s12),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = AppSpacing.s8)) {
-                            Text(
-                                text = "${conversation.counterpartRole} • Personal number masked",
-                                style = AppTextStyles.caption,
-                                fontWeight = FontWeight.SemiBold,
-                                color = AppColors.PrimaryDark,
-                            )
-                            Text(
-                                text = "Use chat or masked Call button above.",
-                                style = AppTextStyles.caption,
-                                color = AppColors.PrimaryDark,
-                            )
-                        }
-                        VerificationBadgeChip(isVerified = conversation.counterpartVerified)
-                    }
-                }
-            }
-            items(
-                items = conversation.messages,
-                key = { it.id },
-                contentType = { if (it.isFromMe) "msg_me" else "msg_other" },
-            ) { msg ->
-                ChatMessageBubble(msg = msg)
-            }
-        }
-    }
-
-    if (showBlockDialog) {
-        RaahiConfirmDialog(
-            title = "Block ${conversation.counterpartName}?",
-            message = "Their rides will be hidden from search. You can unblock them anytime from Settings.",
-            confirmLabel = "Block",
-            isDestructive = true,
-            onConfirm = {
-                showBlockDialog = false
-                onBlockUser(conversation.counterpartId, conversation.counterpartName, conversation.counterpartInitials)
-                onBack()
-            },
-            onDismiss = { showBlockDialog = false },
-        )
-    }
-}
-
-@Composable
-private fun ChatMessageBubble(msg: ChatMessage) {
-    val bubbleShape = remember(msg.isFromMe) {
-        RoundedCornerShape(
-            topStart = 16.dp,
-            topEnd = 16.dp,
-            bottomStart = if (msg.isFromMe) 16.dp else 4.dp,
-            bottomEnd = if (msg.isFromMe) 4.dp else 16.dp,
-        )
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (msg.isFromMe) Arrangement.End else Arrangement.Start,
-    ) {
-        Surface(
-            shape = bubbleShape,
-            color = if (msg.isFromMe) AppColors.Primary else AppColors.SurfaceSubtle,
-            modifier = Modifier.widthIn(max = 290.dp),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s12)) {
-                Text(
-                    text = msg.text,
-                    style = AppTextStyles.bodyCompact,
-                    color = if (msg.isFromMe) Color.White else AppColors.TextPrimary,
-                )
-                Spacer(Modifier.height(AppSpacing.s4))
-                Text(
-                    text = msg.timestampLabel,
-                    style = AppTextStyles.caption,
-                    color = if (msg.isFromMe) Color.White.copy(alpha = 0.78f) else AppColors.TextSecondary,
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
@@ -546,8 +324,10 @@ fun ProfileScreen(
     var showSavedPlacesSheet by remember { mutableStateOf(false) }
     var showPreferencesSheet by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+    var moreExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val myVehiclesCount = state.myVehicles.size
+    val user = state.user
+    val isDriver = user.activeRole == AppRole.DRIVER
     val demoBadgeText = stringResource(id = R.string.demo_badge_label)
 
     LazyColumn(
@@ -557,104 +337,174 @@ fun ProfileScreen(
         contentPadding = PaddingValues(horizontal = AppSpacing.screenPadding, vertical = AppSpacing.s16),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap),
     ) {
-        item(key = "profile_header", contentType = "header") {
-            ProfileHeaderBar(
-                onOpenPublicProfile = onOpenPublicProfile,
+        item(key = "profile_hero", contentType = "hero") {
+            ProfileHeroCard(
+                user = user,
                 onOpenEditProfile = onOpenEditProfile,
                 onOpenSettings = onOpenSettings,
-            )
-        }
-
-        item(key = "profile_user_card", contentType = "user_card") {
-            ProfileUserCard(user = state.user)
-        }
-
-        item(key = "profile_preview_switch", contentType = "preview_switch") {
-            ProfilePreviewSwitchCard(
-                previewAsBasic = state.user.previewAsBasic,
-                onTogglePreviewMode = onTogglePreviewMode,
-            )
-        }
-
-        item(key = "profile_verification_cta", contentType = "verification_cta") {
-            ProfileVerificationCard(
-                user = state.user,
-                onOpenVerificationStatus = onOpenVerificationStatus,
-                onOpenVerificationWizard = onOpenVerificationWizard,
+                onOpenPublicProfile = onOpenPublicProfile,
+                modifier = Modifier.enterAnimation(index = 0),
             )
         }
 
         item(key = "profile_role_switch", contentType = "role_switch") {
-            ProfileRoleSwitchCard(
-                activeRole = state.user.activeRole,
-                onSwitchRole = onSwitchRole,
-            )
+            RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth().enterAnimation(index = 1)) {
+                Row(
+                    modifier = Modifier.padding(AppSpacing.cardPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = AppSpacing.s8)) {
+                        Text("I'm using Raahi as", style = AppTextStyles.cardTitle, color = AppColors.TextPrimary)
+                        Text(
+                            text = if (isDriver) "Offering rides" else "Finding rides",
+                            style = AppTextStyles.caption,
+                            color = AppColors.TextSecondary,
+                        )
+                    }
+                    RoleModePill(activeRole = user.activeRole, onToggle = onSwitchRole)
+                }
+            }
         }
 
-        item(key = "profile_travel_garage", contentType = "section_card") {
-            ProfileTravelGarageCard(
-                vehiclesCount = myVehiclesCount,
-                favouriteRoutesCount = state.favouriteRoutes.size,
-                followedDriversCount = state.followedDriverIds.size,
-                waitlistCount = state.waitlist.size,
-                savedPlacesCount = state.user.savedPlaces.size,
-                onOpenMyVehicles = onOpenMyVehicles,
-                onOpenFavouriteRoutes = onOpenFavouriteRoutes,
-                onOpenFavouriteDrivers = onOpenFavouriteDrivers,
-                onOpenWaitlist = onOpenWaitlist,
-                onOpenSavedPlaces = { showSavedPlacesSheet = true },
-                onOpenPreferences = { showPreferencesSheet = true },
-            )
+        if (!user.isEffectivelyVerified) {
+            item(key = "profile_verify_nudge", contentType = "verify") {
+                RaahiCard(
+                    onClick = onOpenVerificationWizard,
+                    containerColor = AppColors.PrimarySoft,
+                    borderColor = AppColors.Primary.copy(alpha = 0.25f),
+                    elevated = false,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .enterAnimation(index = 2)
+                        .testTag("profile_get_verified_button"),
+                ) {
+                    Row(modifier = Modifier.padding(AppSpacing.cardPadding), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(AppGradients.Brand),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(AppSpacing.s12))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Get the Verified badge", style = AppTextStyles.cardTitle, color = AppColors.PrimaryDark)
+                            Text("Takes 2 minutes • unlocks Verified-only rides", style = AppTextStyles.caption, color = AppColors.PrimaryDark)
+                        }
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = AppColors.PrimaryDark)
+                    }
+                }
+            }
         }
 
-        item(key = "profile_safety_contacts", contentType = "section_card") {
-            ProfileSafetyContactsCard(
-                emergencyCount = state.emergencyContacts.size,
-                trustedCount = state.trustedContacts.size,
-                autoShareLiveRide = state.user.autoShareLiveRide,
-                complaintsCount = state.complaints.size,
-                onOpenSafety = onOpenSafety,
-                onOpenEmergencyContacts = onOpenEmergencyContacts,
-                onOpenTrustedContacts = onOpenTrustedContacts,
-                onOpenSupport = onOpenSupport,
-            )
+        item(key = "profile_essentials", contentType = "section_card") {
+            RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth().enterAnimation(index = 3)) {
+                Column {
+                    if (isDriver || state.myVehicles.isNotEmpty()) {
+                        RaahiListRow(
+                            icon = Icons.Rounded.DirectionsCar,
+                            title = "My car",
+                            subtitle = "${state.myVehicles.size} vehicle(s)",
+                            onClick = onOpenMyVehicles,
+                            testTag = "profile_vehicles_item",
+                        )
+                        HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
+                    }
+                    RaahiListRow(
+                        icon = Icons.Rounded.Shield,
+                        title = "Safety & SOS",
+                        subtitle = "Emergency tools for every trip",
+                        iconTint = AppColors.Error,
+                        iconBg = AppColors.SosBg,
+                        onClick = onOpenSafety,
+                        testTag = "profile_safety_item",
+                    )
+                    HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
+                    RaahiListRow(
+                        icon = Icons.Rounded.ContactPhone,
+                        title = "Emergency contacts",
+                        subtitle = if (state.emergencyContacts.isEmpty()) "Add someone we can alert" else "${state.emergencyContacts.size} saved",
+                        onClick = onOpenEmergencyContacts,
+                        testTag = "profile_emergency_contacts_item",
+                    )
+                    HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
+                    RaahiListRow(
+                        icon = Icons.Rounded.HelpOutline,
+                        title = "Help",
+                        subtitle = "Questions & support",
+                        onClick = onOpenHelpCenter,
+                        testTag = "profile_help_item",
+                    )
+                    HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
+                    RaahiListRow(
+                        icon = Icons.Rounded.Settings,
+                        title = "Settings",
+                        subtitle = "Language, notifications, blocked users",
+                        onClick = onOpenSettings,
+                        testTag = "profile_settings_item",
+                    )
+                }
+            }
         }
 
-        item(key = "profile_finance_help", contentType = "section_card") {
-            ProfileFinanceHelpCard(
-                paymentsCount = state.payments.size,
-                language = state.user.language,
-                onOpenSavings = onOpenSavings,
-                onOpenDriverEarnings = onOpenDriverEarnings,
-                onOpenPaymentHistory = onOpenPaymentHistory,
-                onOpenReferralPromo = onOpenReferralPromo,
-                onOpenHelpCenter = onOpenHelpCenter,
-                onOpenSettings = onOpenSettings,
-                onRequestResetDemo = { showResetConfirm = true },
-            )
+        item(key = "profile_more", contentType = "more_card") {
+            ProfileMoreCard(
+                expanded = moreExpanded,
+                onToggle = { moreExpanded = !moreExpanded },
+                modifier = Modifier.enterAnimation(index = 4),
+            ) {
+                RaahiListRow(Icons.Rounded.BookmarkBorder, "Favourite routes", onOpenFavouriteRoutes, subtitle = "${state.favouriteRoutes.size} saved", testTag = "profile_fav_routes_item")
+                RaahiListRow(Icons.Rounded.FavoriteBorder, "Favourite drivers", onOpenFavouriteDrivers, subtitle = "${state.followedDriverIds.size} followed", testTag = "profile_fav_drivers_item")
+                RaahiListRow(Icons.Rounded.HourglassEmpty, "Waitlist", onOpenWaitlist, subtitle = "${state.waitlist.size} full ride(s) watched", testTag = "profile_waitlist_item")
+                RaahiListRow(Icons.Rounded.Place, "Saved places", { showSavedPlacesSheet = true }, subtitle = "${user.savedPlaces.size} saved", testTag = "profile_saved_places_item")
+                RaahiListRow(Icons.Rounded.Tune, "Ride preferences", { showPreferencesSheet = true }, subtitle = "AC, quiet ride, pets…", testTag = "profile_preferences_item")
+                RaahiListRow(Icons.Rounded.ShareLocation, "Trusted contacts", onOpenTrustedContacts, subtitle = "${state.trustedContacts.size}/3 • share live trips", testTag = "profile_trusted_contacts_item")
+                RaahiListRow(Icons.Rounded.Badge, "Verification status", onOpenVerificationStatus, subtitle = user.verificationStatus.label, testTag = "profile_verification_status_btn")
+                RaahiListRow(Icons.Rounded.SupportAgent, "Support & disputes", onOpenSupport, subtitle = "${state.complaints.size} ticket(s)", testTag = "profile_support_item")
+                RaahiListRow(Icons.Rounded.Savings, "My savings", onOpenSavings, testTag = "profile_savings_item")
+                RaahiListRow(Icons.Rounded.Payments, "Driver earnings", onOpenDriverEarnings, testTag = "profile_earnings_item")
+                RaahiListRow(Icons.Rounded.ReceiptLong, "Payment history", onOpenPaymentHistory, subtitle = "${state.payments.size} payment(s)", testTag = "profile_payment_history_item")
+                RaahiListRow(Icons.Rounded.CardGiftcard, "Invite friends & promos", onOpenReferralPromo, subtitle = "Code FIRST50 = 50% off", testTag = "profile_referral_item")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s8),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Demo: preview as Verified", style = AppTextStyles.body, color = AppColors.TextPrimary)
+                        Text("Switch to test Verified-only features", style = AppTextStyles.caption, color = AppColors.TextSecondary)
+                    }
+                    Switch(
+                        checked = !user.previewAsBasic,
+                        onCheckedChange = { verified -> onTogglePreviewMode(!verified) },
+                        modifier = Modifier.testTag("profile_preview_verified_switch"),
+                    )
+                }
+                RaahiListRow(Icons.Rounded.RestartAlt, "Reset demo data", { showResetConfirm = true }, subtitle = "Restore sample rides & chats", testTag = "profile_reset_demo_item")
+            }
         }
 
         item(key = "profile_logout", contentType = "logout_btn") {
             RaahiSecondaryButton(
-                text = "Log Out",
+                text = "Log out",
                 icon = Icons.Rounded.Logout,
                 onClick = onSignOut,
+                textColor = AppColors.Error,
                 modifier = Modifier.testTag("profile_sign_out_button"),
             )
         }
 
         item(key = "profile_demo_badge", contentType = "demo_label") {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = demoBadgeText,
-                    style = AppTextStyles.caption,
-                    color = AppColors.TextSecondary,
-                )
-                Spacer(Modifier.height(AppSpacing.s8))
-            }
+            Text(
+                text = demoBadgeText,
+                style = AppTextStyles.caption,
+                color = AppColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = AppSpacing.s8),
+            )
         }
     }
 
@@ -763,341 +613,152 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileHeaderBar(
-    onOpenPublicProfile: () -> Unit,
+private fun ProfileHeroCard(
+    user: AppUser,
     onOpenEditProfile: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPublicProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(AppGradients.Brand),
     ) {
-        Text("Profile", style = AppTextStyles.screenTitle, color = AppColors.TextPrimary)
-        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.s4), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onOpenPublicProfile, modifier = Modifier.testTag("profile_public_view_btn")) {
-                Text("Public View", style = AppTextStyles.button, color = AppColors.Primary, maxLines = 1)
+        // Decorative soft circles
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 40.dp, y = (-50).dp)
+                .size(160.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f)),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .offset(x = (-30).dp, y = 40.dp)
+                .size(110.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.06f)),
+        )
+        Column(modifier = Modifier.padding(AppSpacing.s20)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Profile", style = AppTextStyles.sectionTitle, color = Color.White, modifier = Modifier.weight(1f))
+                IconButton(onClick = onOpenEditProfile, modifier = Modifier.testTag("profile_edit_btn")) {
+                    Icon(Icons.Rounded.Edit, contentDescription = "Edit profile", tint = Color.White)
+                }
+                IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("profile_settings_btn")) {
+                    Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
+                }
             }
-            IconButton(onClick = onOpenEditProfile, modifier = Modifier.testTag("profile_edit_btn")) {
-                Icon(Icons.Rounded.Edit, contentDescription = "Edit profile", tint = AppColors.TextPrimary, modifier = Modifier.size(22.dp))
-            }
-            IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("profile_settings_btn")) {
-                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = AppColors.TextPrimary, modifier = Modifier.size(22.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileUserCard(user: AppUser) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(AppSpacing.cardPadding),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AvatarBadge(
-                initials = user.initials,
-                backgroundColor = AppColors.PrimarySoft,
-                isVerified = user.isEffectivelyVerified,
-                size = 68.dp,
-            )
-            Spacer(Modifier.width(AppSpacing.s16))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(user.name, style = AppTextStyles.sectionTitle, color = AppColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "${user.homeCity} • ${user.gender} • ${user.rating} ★",
-                    style = AppTextStyles.caption,
-                    color = AppColors.TextSecondary,
-                )
-                Spacer(Modifier.height(AppSpacing.s8))
-                VerificationBadgeChip(
-                    isVerified = user.isEffectivelyVerified,
-                    label = user.effectiveVerificationLevel.label,
-                    modifier = Modifier.testTag("profile_verification_badge"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfilePreviewSwitchCard(
-    previewAsBasic: Boolean,
-    onTogglePreviewMode: (Boolean) -> Unit,
-) {
-    RaahiCard(
-        containerColor = AppColors.PrimarySoft,
-        borderColor = AppColors.Primary.copy(alpha = 0.25f),
-        elevated = false,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(AppSpacing.cardPadding),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = AppSpacing.s8)) {
-                Text("Preview as: Basic / Verified", style = AppTextStyles.cardTitle, color = AppColors.PrimaryDark)
-                Text(
-                    text = if (previewAsBasic) "Currently Basic — Verified-Only rides locked" else "Currently Verified — Full ride & driver access",
-                    style = AppTextStyles.caption,
-                    color = AppColors.PrimaryDark,
-                )
-            }
-            Switch(
-                checked = !previewAsBasic,
-                onCheckedChange = { verified -> onTogglePreviewMode(!verified) },
-                modifier = Modifier.testTag("profile_preview_verified_switch"),
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ProfileVerificationCard(
-    user: AppUser,
-    onOpenVerificationStatus: () -> Unit,
-    onOpenVerificationWizard: () -> Unit,
-) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(AppSpacing.cardPadding), verticalArrangement = Arrangement.spacedBy(AppSpacing.s12)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.height(AppSpacing.s8))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(user.initials, style = AppTextStyles.screenTitle, color = AppColors.Primary)
+                }
+                Spacer(Modifier.width(AppSpacing.s16))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("ID & Driver Verification", style = AppTextStyles.cardTitle, color = AppColors.TextPrimary)
-                    Text("Status: ${user.verificationStatus.label}", style = AppTextStyles.caption, color = AppColors.TextSecondary)
-                }
-                TextButton(onClick = onOpenVerificationStatus, modifier = Modifier.testTag("profile_verification_status_btn")) {
-                    Text("Status", style = AppTextStyles.button, color = AppColors.Primary, maxLines = 1)
+                    Text(
+                        text = user.name,
+                        style = AppTextStyles.screenTitle,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Star, contentDescription = null, tint = AppColors.Accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("${user.rating} • ${user.homeCity}", style = AppTextStyles.caption, color = Color.White.copy(alpha = 0.85f))
+                    }
+                    Spacer(Modifier.height(AppSpacing.s8))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.18f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .testTag("profile_verification_badge"),
+                    ) {
+                        Icon(
+                            imageVector = if (user.isEffectivelyVerified) Icons.Rounded.Verified else Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(user.effectiveVerificationLevel.label, style = AppTextStyles.chip, color = Color.White)
+                    }
                 }
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.s8),
-                verticalArrangement = Arrangement.spacedBy(AppSpacing.s8),
+            Spacer(Modifier.height(AppSpacing.s12))
+            Text(
+                text = "See how others view you →",
+                style = AppTextStyles.chip,
+                color = AppColors.Mint,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClick = onOpenPublicProfile)
+                    .padding(vertical = 4.dp)
+                    .testTag("profile_public_view_btn"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileMoreCard(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(RaahiMotion.MEDIUM),
+        label = "moreChevron",
+    )
+    RaahiCard(elevated = false, modifier = modifier.fillMaxWidth()) {
+        Column {
+            RaahiListRow(
+                icon = Icons.Rounded.GridView,
+                title = if (expanded) "Fewer options" else "More",
+                subtitle = if (expanded) null else "Favourites, payments, promos & more",
+                onClick = onToggle,
+                iconTint = AppColors.TextPrimary,
+                iconBg = AppColors.SurfaceSubtle,
+                trailing = {
+                    Icon(
+                        imageVector = Icons.Rounded.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = AppColors.TextSecondary,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .rotate(rotation),
+                    )
+                },
+                testTag = "profile_more_toggle",
+            )
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(RaahiMotion.MEDIUM)) + fadeIn(tween(RaahiMotion.MEDIUM)),
+                exit = shrinkVertically(tween(RaahiMotion.MEDIUM)) + fadeOut(tween(RaahiMotion.SHORT)),
             ) {
-                VerificationBadgeChip(isVerified = user.cnicVerified && !user.previewAsBasic, label = "CNIC")
-                VerificationBadgeChip(isVerified = user.licenceVerified && !user.previewAsBasic, label = "Licence")
-                VerificationBadgeChip(isVerified = user.vehicleVerified && !user.previewAsBasic, label = "Vehicle")
+                Column {
+                    HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
+                    content()
+                }
             }
-            RaahiSecondaryButton(
-                text = if (user.isEffectivelyVerified) "Verification Wizard" else "Get Verified",
-                icon = Icons.Rounded.VerifiedUser,
-                onClick = onOpenVerificationWizard,
-                modifier = Modifier.testTag("profile_get_verified_button"),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileRoleSwitchCard(
-    activeRole: AppRole,
-    onSwitchRole: (AppRole) -> Unit,
-) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(AppSpacing.cardPadding),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = AppSpacing.s8)) {
-                Text("App mode", style = AppTextStyles.cardTitle, color = AppColors.TextPrimary)
-                Text(
-                    text = if (activeRole == AppRole.DRIVER) "Driver Mode active" else "Passenger Mode active",
-                    style = AppTextStyles.caption,
-                    color = AppColors.TextSecondary,
-                )
-            }
-            RoleModePill(activeRole = activeRole, onToggle = onSwitchRole)
-        }
-    }
-}
-
-@Composable
-private fun ProfileTravelGarageCard(
-    vehiclesCount: Int,
-    favouriteRoutesCount: Int,
-    followedDriversCount: Int,
-    waitlistCount: Int,
-    savedPlacesCount: Int,
-    onOpenMyVehicles: () -> Unit,
-    onOpenFavouriteRoutes: () -> Unit,
-    onOpenFavouriteDrivers: () -> Unit,
-    onOpenWaitlist: () -> Unit,
-    onOpenSavedPlaces: () -> Unit,
-    onOpenPreferences: () -> Unit,
-) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Column {
-            RaahiListRow(
-                icon = Icons.Rounded.DirectionsCar,
-                title = "My vehicles",
-                subtitle = "$vehiclesCount registered vehicle(s)",
-                onClick = onOpenMyVehicles,
-                testTag = "profile_vehicles_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.BookmarkBorder,
-                title = "Favourite routes",
-                subtitle = "$favouriteRoutesCount saved routes",
-                onClick = onOpenFavouriteRoutes,
-                testTag = "profile_fav_routes_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.FavoriteBorder,
-                title = "Favourite drivers",
-                subtitle = "$followedDriversCount drivers followed",
-                onClick = onOpenFavouriteDrivers,
-                testTag = "profile_fav_drivers_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.HourglassEmpty,
-                title = "Waitlist",
-                subtitle = "$waitlistCount full ride(s) watched",
-                onClick = onOpenWaitlist,
-                testTag = "profile_waitlist_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.Place,
-                title = "Saved places",
-                subtitle = "$savedPlacesCount locations saved",
-                onClick = onOpenSavedPlaces,
-                testTag = "profile_saved_places_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.Tune,
-                title = "Ride preferences",
-                subtitle = "AC, chatty/silent, pets, smoking, women-only",
-                onClick = onOpenPreferences,
-                testTag = "profile_preferences_item",
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileSafetyContactsCard(
-    emergencyCount: Int,
-    trustedCount: Int,
-    autoShareLiveRide: Boolean,
-    complaintsCount: Int,
-    onOpenSafety: () -> Unit,
-    onOpenEmergencyContacts: () -> Unit,
-    onOpenTrustedContacts: () -> Unit,
-    onOpenSupport: () -> Unit,
-) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Column {
-            RaahiListRow(
-                icon = Icons.Rounded.Shield,
-                title = "Safety Center",
-                subtitle = "SOS toolkit, Lost & Found, Report, Blocked",
-                onClick = onOpenSafety,
-                testTag = "profile_safety_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.ContactPhone,
-                title = "Emergency contacts",
-                subtitle = "$emergencyCount saved",
-                onClick = onOpenEmergencyContacts,
-                testTag = "profile_emergency_contacts_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.ShareLocation,
-                title = "Trusted contacts",
-                subtitle = "$trustedCount/3 • Auto-share ${if (autoShareLiveRide) "ON" else "OFF"}",
-                onClick = onOpenTrustedContacts,
-                testTag = "profile_trusted_contacts_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.SupportAgent,
-                title = "Support & Disputes",
-                subtitle = "$complaintsCount tickets",
-                onClick = onOpenSupport,
-                testTag = "profile_support_item",
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileFinanceHelpCard(
-    paymentsCount: Int,
-    language: String,
-    onOpenSavings: () -> Unit,
-    onOpenDriverEarnings: () -> Unit,
-    onOpenPaymentHistory: () -> Unit,
-    onOpenReferralPromo: () -> Unit,
-    onOpenHelpCenter: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onRequestResetDemo: () -> Unit,
-) {
-    RaahiCard(elevated = false, modifier = Modifier.fillMaxWidth()) {
-        Column {
-            RaahiListRow(
-                icon = Icons.Rounded.Savings,
-                title = "Savings dashboard",
-                subtitle = "PKR 14,800 saved • CO2 avoided",
-                onClick = onOpenSavings,
-                testTag = "profile_savings_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.Payments,
-                title = "Driver earnings",
-                subtitle = "Weekly fuel-split payouts (demo)",
-                onClick = onOpenDriverEarnings,
-                testTag = "profile_earnings_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.ReceiptLong,
-                title = "Payment history",
-                subtitle = "$paymentsCount Cash / JazzCash / Easypaisa logs",
-                onClick = onOpenPaymentHistory,
-                testTag = "profile_payment_history_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.CardGiftcard,
-                title = "Referrals & Promos",
-                subtitle = "Use FIRST50 for 50% off demo fare",
-                onClick = onOpenReferralPromo,
-                testTag = "profile_referral_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.HelpOutline,
-                title = "Help Center & FAQ",
-                subtitle = "Common questions & prototype guide",
-                onClick = onOpenHelpCenter,
-                testTag = "profile_help_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.Settings,
-                title = "Settings",
-                subtitle = "Language ($language), Blocked users, Terms",
-                onClick = onOpenSettings,
-                testTag = "profile_settings_item",
-            )
-            HorizontalDivider(color = AppColors.Border, thickness = 1.dp)
-            RaahiListRow(
-                icon = Icons.Rounded.RestartAlt,
-                title = "Reset demo data",
-                subtitle = "Restore initial sample rides, offers & bookings",
-                onClick = onRequestResetDemo,
-                testTag = "profile_reset_demo_item",
-            )
         }
     }
 }
