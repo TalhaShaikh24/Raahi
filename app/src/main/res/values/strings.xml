@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Raahi</string>
+    <string name="demo_badge_label">Prototype Demo • Local Data</string>
+    <string name="sos_disclaimer">Demo Prototype Notice: No real emergency service or authority is contacted in this prototype.</string>
+</resources>

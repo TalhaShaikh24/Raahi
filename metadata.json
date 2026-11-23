@@ -1,0 +1,6 @@
+{
+  "name": "Raahi",
+  "description": "Intercity and urban carpooling marketplace prototype with passenger ride discovery, counter-offer fare negotiation, and driver ride publishing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
